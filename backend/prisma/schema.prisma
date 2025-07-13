@@ -1,0 +1,294 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+  FREELANCER
+  CLIENT
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  role         UserRole
+  avatarUrl    String?  @map("avatar_url")
+  phone        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  companyUsers    CompanyUser[]
+  createdProjects Project[]     @relation("ProjectCreator")
+  assignedTasks   Task[]        @relation("TaskAssignee")
+  createdTasks    Task[]        @relation("TaskCreator")
+  timeEntries     TimeEntry[]
+  approvedEntries TimeEntry[]   @relation("TimeEntryApprover")
+  createdContracts Contract[]   @relation("ContractCreator")
+  createdInvoices Invoice[]     @relation("InvoiceCreator")
+  comments        Comment[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  website   String?
+  address   String?
+  taxId     String?  @map("tax_id")
+  logoUrl   String?  @map("logo_url")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  companyUsers CompanyUser[]
+  projects     Project[]
+  contracts    Contract[]
+  invoices     Invoice[]
+
+  @@map("companies")
+}
+
+model CompanyUser {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  userId    String   @map("user_id")
+  role      UserRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relationships
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@map("company_users")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  companyId   String        @map("company_id")
+  name        String
+  description String?
+  status      ProjectStatus @default(PLANNING)
+  startDate   DateTime?     @map("start_date")
+  endDate     DateTime?     @map("end_date")
+  budget      Decimal?      @db.Decimal(10, 2)
+  hourlyRate  Decimal?      @map("hourly_rate") @db.Decimal(8, 2)
+  createdBy   String        @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relationships
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator   User        @relation("ProjectCreator", fields: [createdBy], references: [id])
+  tasks     Task[]
+  contracts Contract[]
+  invoices  Invoice[]
+
+  @@map("projects")
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  projectId      String       @map("project_id")
+  title          String
+  description    String?
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  assignedTo     String?      @map("assigned_to")
+  estimatedHours Decimal?     @map("estimated_hours") @db.Decimal(8, 2)
+  dueDate        DateTime?    @map("due_date")
+  completedAt    DateTime?    @map("completed_at")
+  createdBy      String       @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  // Relationships
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?       @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  creator     User        @relation("TaskCreator", fields: [createdBy], references: [id])
+  timeEntries TimeEntry[]
+  comments    Comment[]
+  subtasks    Task[]      @relation("TaskSubtasks")
+  parentTask  Task?       @relation("TaskSubtasks", fields: [parentTaskId], references: [id])
+  parentTaskId String?    @map("parent_task_id")
+
+  @@map("tasks")
+}
+
+model TimeEntry {
+  id              String    @id @default(uuid())
+  taskId          String    @map("task_id")
+  userId          String    @map("user_id")
+  description     String?
+  startTime       DateTime  @map("start_time")
+  endTime         DateTime? @map("end_time")
+  durationMinutes Int       @map("duration_minutes")
+  hourlyRate      Decimal   @map("hourly_rate") @db.Decimal(8, 2)
+  isBillable      Boolean   @default(true) @map("is_billable")
+  isApproved      Boolean   @default(false) @map("is_approved")
+  approvedBy      String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relationships
+  task     Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user     User  @relation(fields: [userId], references: [id])
+  approver User? @relation("TimeEntryApprover", fields: [approvedBy], references: [id])
+
+  @@map("time_entries")
+}
+
+model Contract {
+  id           String         @id @default(uuid())
+  companyId    String         @map("company_id")
+  projectId    String?        @map("project_id")
+  title        String
+  content      String
+  status       ContractStatus @default(DRAFT)
+  totalValue   Decimal?       @map("total_value") @db.Decimal(10, 2)
+  signedAt     DateTime?      @map("signed_at")
+  signedByClient String?      @map("signed_by_client")
+  createdBy    String         @map("created_by")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  // Relationships
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+  creator User     @relation("ContractCreator", fields: [createdBy], references: [id])
+
+  @@map("contracts")
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  companyId     String        @map("company_id")
+  projectId     String?       @map("project_id")
+  invoiceNumber String        @unique @map("invoice_number")
+  description   String?
+  subtotal      Decimal       @db.Decimal(10, 2)
+  taxRate       Decimal       @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount     Decimal       @map("tax_amount") @db.Decimal(10, 2)
+  totalAmount   Decimal       @map("total_amount") @db.Decimal(10, 2)
+  status        InvoiceStatus @default(DRAFT)
+  dueDate       DateTime      @map("due_date")
+  paidAt        DateTime?     @map("paid_at")
+  createdBy     String        @map("created_by")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relationships
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+  creator User     @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  items   InvoiceItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String  @map("invoice_id")
+  description String
+  quantity    Decimal @db.Decimal(8, 2)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(8, 2)
+  totalPrice  Decimal @map("total_price") @db.Decimal(10, 2)
+
+  // Relationships
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("comments")
+}
+
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  title       String
+  message     String
+  type        String    @default("info") // info, success, warning, error, task, comment, invoice, contract
+  isRead      Boolean   @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  relatedId   String?   @map("related_id") // ID do objeto relacionado (task, project, etc.)
+  relatedType String?   @map("related_type") // Tipo do objeto relacionado
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
