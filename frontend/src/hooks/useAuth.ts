@@ -16,7 +16,7 @@ export const useAuth = () => {
       return response.data.data
     },
     onSuccess: (data) => {
-      login(data.user, data.token, data.refreshToken)
+      login(data.user, data.accessToken, data.refreshToken)
       router.push('/dashboard')
     },
     onError: (error: any) => {
@@ -31,7 +31,7 @@ export const useAuth = () => {
       return response.data.data
     },
     onSuccess: (data) => {
-      login(data.user, data.token, data.refreshToken)
+      login(data.user, data.accessToken, data.refreshToken)
       router.push('/dashboard')
     },
     onError: (error: any) => {
@@ -123,9 +123,9 @@ export const useAuth = () => {
     isAuthenticated,
     isLoading: loginMutation.isPending || registerMutation.isPending || isVerifying,
 
-    // Actions
-    login: loginMutation.mutate,
-    register: registerMutation.mutate,
+    // Actions - return mutation objects instead of mutate functions
+    login: loginMutation,
+    register: registerMutation,
     logout: logoutMutation.mutate,
     updateProfile: updateProfileMutation.mutate,
     changePassword: changePasswordMutation.mutate,
